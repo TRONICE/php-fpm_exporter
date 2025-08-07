@@ -20,9 +20,9 @@ import (
 )
 
 var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	version = "Tronice-v2.2.0-1001"
+	commit  = "0ef3d97"
+  date    = "2025-08-07 17:55"
 )
 
 func main() {

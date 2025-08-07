@@ -17,6 +17,11 @@ package phpfpm
 import (
 	"fmt"
 	"sync"
+  //加上 bufio, os, strconv
+  "bufio"
+  "os"
+  "strconv"
+  "strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -158,7 +163,8 @@ func NewExporter(pm PoolManager) *Exporter {
 		processRequestDuration: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "process_request_duration"),
 			"The duration in microseconds of the requests.",
-			[]string{"pool", "child", "scrape_uri"},
+			//[]string{"pool", "child", "scrape_uri"},
+      []string{"pool", "child", "scrape_uri", "uri", "fqdn", "module", "controller", "action", "authorize_identity", "post_parameters"},
 			nil),
 
 		processState: prometheus.NewDesc(
@@ -230,7 +236,52 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 			ch <- prometheus.MustNewConstMetric(e.processRequests, prometheus.CounterValue, float64(process.Requests), pool.Name, childName, pool.Address)
 			ch <- prometheus.MustNewConstMetric(e.processLastRequestMemory, prometheus.GaugeValue, float64(process.LastRequestMemory), pool.Name, childName, pool.Address)
 			ch <- prometheus.MustNewConstMetric(e.processLastRequestCPU, prometheus.GaugeValue, process.LastRequestCPU, pool.Name, childName, pool.Address)
-			ch <- prometheus.MustNewConstMetric(e.processRequestDuration, prometheus.GaugeValue, float64(process.RequestDuration), pool.Name, childName, pool.Address)
+      // ================================= modified by FirTsai on 2025-02-24 [Start] =================================
+
+      pid := strconv.FormatInt(process.PID, 10)
+      statusFile := "/dev/shm/php-fpm-status-" + pid
+      statusFileHandler, err := os.Open(statusFile)
+
+      if err == nil {
+          fileScanner := bufio.NewScanner(statusFileHandler)
+          fileScanner.Split(bufio.ScanLines)
+
+          //第 1 行 URI
+          fileScanner.Scan()
+          uri := strings.ToValidUTF8(fileScanner.Text(), "")
+
+          //第 2 行 FQDN
+          fileScanner.Scan()
+          fqdn:= strings.ToValidUTF8(fileScanner.Text(), "")
+
+          //第 3 行 module
+          fileScanner.Scan()
+          module := strings.ToValidUTF8(fileScanner.Text(), "")
+
+          //第 4 行 controller
+          fileScanner.Scan()
+          controller := strings.ToValidUTF8(fileScanner.Text(), "")
+
+          //第 5 行 action
+          fileScanner.Scan()
+          action := strings.ToValidUTF8(fileScanner.Text(), "")
+
+          //第 6 行 authorize_identity
+          fileScanner.Scan()
+          authorize_identity := strings.ToValidUTF8(fileScanner.Text(), "")
+
+          //第 7 行 post_parameters
+          fileScanner.Scan()
+          post_parameters := strings.ToValidUTF8(fileScanner.Text(), "")
+
+          statusFileHandler.Close()
+
+          ch <- prometheus.MustNewConstMetric(e.processRequestDuration, prometheus.GaugeValue, float64(process.RequestDuration), pool.Name, childName, pool.Address, uri, fqdn, module, controller, action, authorize_identity, post_parameters)
+      } else {
+          ch <- prometheus.MustNewConstMetric(e.processRequestDuration, prometheus.GaugeValue, float64(process.RequestDuration), pool.Name, childName, pool.Address, "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL")
+      }
+
+      // ================================= modified by FirTsai on 2025-02-24 [ END ] =================================
 		}
 	}
 }
